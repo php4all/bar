@@ -44,6 +44,11 @@ typedef struct screen_t {
     int width;
 } screen_t;
 
+typedef struct event_t {
+	int start;
+	int stop;
+} event_t;
+
 static xcb_connection_t *c;
 static xcb_window_t     win;
 static xcb_drawable_t   canvas;
@@ -59,11 +64,13 @@ static fontset_item_t   *sel_font = NULL;
 static screen_t         *screens;
 static int              num_screens;
 static const unsigned   palette[] = {COLOR0,COLOR1,COLOR2,COLOR3,COLOR4,COLOR5,COLOR6,COLOR7,COLOR8,COLOR9,BACKGROUND,FOREGROUND};
+static const char*	event[] = {EVENT0,EVENT1,EVENT2,EVENT3,EVENT4,EVENT5,EVENT6,EVENT7,EVENT8,EVENT9};
+static event_t			*eventset[9];
 
 #if XINERAMA
-static const char *control_characters = "fbulcsr";
+static const char *control_characters = "fbulcsre";
 #else
-static const char *control_characters = "fbulcr";
+static const char *control_characters = "fbulcre";
 #endif
 
 static inline void
@@ -98,6 +105,51 @@ xcb_set_fontset (int i)
         sel_font = &fontset[i];
         xcb_change_gc (c, draw_gc , XCB_GC_FONT, (const uint32_t []){ sel_font->xcb_ft });
     }
+}
+
+static inline void 
+xcb_process_event(int16_t x) {
+	for (int i=0; i < 9; i++) {
+		if (eventset[i] != NULL && event[i] != NULL) {
+
+			if (eventset[i]->start < x && eventset[i]->stop > x) {
+				system(event[i]);
+				break;
+			}
+		}
+	}
+}
+
+static inline void 
+xcb_start_event(screen_t *screen, int i, int x, int align) {
+	event_t *e = calloc(1,sizeof(event_t));
+	switch(align) {
+		case ALIGN_C:
+			e->start = screen->width / 2 - x / 2 + screen->x;
+			break;
+		case ALIGN_R:
+			e->start = screen->width - x  + screen->x;
+			break;
+	}
+	e->stop = e->start+1;
+	if (eventset[i] != NULL) {
+		free(eventset[i]);
+	}
+	eventset[i] = e;
+}
+
+static inline void
+xcb_stop_event (screen_t *screen, int i, int x, int align) {
+	event_t *e = eventset[i];
+	switch(align) {
+		case ALIGN_C:
+			e->stop = screen->width / 2 - (e->start + x) / 2 + screen->x;
+			break;
+		case ALIGN_R:
+			e->stop = screen->width - (e->start + x)  + screen->x;
+			break;
+	}
+	printf("%d %d", e->start, e->stop);
 }
 
 int
@@ -150,6 +202,7 @@ parse (char *text)
 
     int pos_x = 0;
     int align = 0;
+	int event_i = 0;
     screen_t *screen = &screens[0];
 
     xcb_fill_rect (clear_gc, 0, 0, bar_width, BAR_HEIGHT);
@@ -174,6 +227,15 @@ parse (char *text)
                         xcb_set_ud (isdigit(*p) ? (*p)-'0' : 10);
                         p++;
                         break;
+					case 'e':
+						if (isdigit(*p)) {
+							event_i = (*p)-'0'; 
+							xcb_start_event(screen, event_i, pos_x, align);
+						}
+						else
+							xcb_stop_event(screen, event_i, pos_x, align);
+						p++;
+						break;
 #if XINERAMA
                     case 's':
                         if ((*p) == 'r') {
@@ -446,7 +508,7 @@ init (void)
     win = xcb_generate_id (c);
     xcb_create_window (c, XCB_COPY_FROM_PARENT, win, root, BAR_OFFSET, y, bar_width,
             BAR_HEIGHT, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, scr->root_visual,
-            XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK, (const uint32_t []){ palette[10], XCB_EVENT_MASK_EXPOSURE });
+            XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK , (const uint32_t []){ palette[10], XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS});
 
     /* For WM that support EWMH atoms */
     set_ewmh_atoms();
@@ -471,6 +533,8 @@ init (void)
     xcb_map_window (c, win);
 
     xcb_flush (c);
+
+
 }
 
 void
@@ -515,6 +579,7 @@ main (int argc, char **argv)
 
     xcb_generic_event_t *ev;
     xcb_expose_event_t *expose_ev;
+	xcb_button_press_event_t *button_ev;
 
     int permanent = 0;
 
@@ -558,13 +623,21 @@ main (int argc, char **argv)
                 redraw = 1;
             }
             if (pollin[1].revents & POLLIN) { /* Xserver broadcasted an event */
+				printf ("poll xcb events\n");
+				fflush(stdout);
                 while ((ev = xcb_poll_for_event (c))) {
-                    expose_ev = (xcb_expose_event_t *)ev;
+					printf("xcb event find\n\t%d\n", ev->response_type);
 
-                    switch (ev->response_type & 0x7F) {
+                    switch (ev->response_type & ~0x80) {
                         case XCB_EXPOSE: 
+							printf("xcb expose event\n");
+                    		expose_ev = (xcb_expose_event_t *)ev;
                             if (expose_ev->count == 0) redraw = 1; 
                         break;
+						case XCB_BUTTON_PRESS:
+							printf("xcb button press event\n");
+							button_ev = (xcb_button_press_event_t *)ev;
+							xcb_process_event(button_ev->event_x);
                     }
 
                     free (ev);
@@ -576,6 +649,7 @@ main (int argc, char **argv)
             xcb_copy_area (c, canvas, win, draw_gc, 0, 0, 0, 0, bar_width, BAR_HEIGHT);
 
         xcb_flush (c);
+		
     }
 
     return 0;
