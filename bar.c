@@ -125,7 +125,7 @@ xcb_start_event(screen_t *screen, int i, int x, int align) {
 	event_t *e = calloc(1,sizeof(event_t));
 	switch(align) {
 		case ALIGN_C:
-			e->start = screen->width / 2 - x / 2 + screen->x;
+			e->start = screen->width / 2 - x +  screen->x;
 			break;
 		case ALIGN_R:
 			e->start = screen->width - x  + screen->x;
@@ -143,10 +143,10 @@ xcb_stop_event (screen_t *screen, int i, int x, int align) {
 	event_t *e = eventset[i];
 	switch(align) {
 		case ALIGN_C:
-			e->stop = screen->width / 2 - (e->start + x) / 2 + screen->x;
+			e->stop = screen->width / 2 - ((e->start - screen->width / 2 - screen->x) -  x) / 2 + screen->x;
 			break;
 		case ALIGN_R:
-			e->stop = screen->width - (e->start + x)  + screen->x;
+			e->stop = screen->width - (e->start - screen->width / 2 - screen->x) - x + screen->x;
 			break;
 	}
 	printf("%d %d", e->start, e->stop);
@@ -637,6 +637,7 @@ main (int argc, char **argv)
 						case XCB_BUTTON_PRESS:
 							printf("xcb button press event\n");
 							button_ev = (xcb_button_press_event_t *)ev;
+							printf("\tx:%d y:%d\n", button_ev->event_x, button_ev->event_y);
 							xcb_process_event(button_ev->event_x);
                     }
 
