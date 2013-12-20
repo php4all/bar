@@ -111,7 +111,11 @@ static inline void
 xcb_process_event(int16_t x) {
 	for (int i=0; i < 9; i++) {
 		if (eventset[i] != NULL && event[i] != NULL) {
-
+			if (eventset[i]->start > eventset[i]->stop) {
+				int buf = eventset[i]->start;
+				eventset[i]->start = eventset[i]->stop;
+				eventset[i]->stop = buf;
+			}
 			if (eventset[i]->start < x && eventset[i]->stop > x) {
 				system(event[i]);
 				break;
@@ -123,12 +127,13 @@ xcb_process_event(int16_t x) {
 static inline void 
 xcb_start_event(screen_t *screen, int i, int x, int align) {
 	event_t *e = calloc(1,sizeof(event_t));
+	printf("%d\n", x);
 	switch(align) {
 		case ALIGN_C:
-			e->start = screen->width / 2 - x +  screen->x;
+			e->start = screen->width / 2 - x + screen->x;
 			break;
 		case ALIGN_R:
-			e->start = screen->width - x  + screen->x;
+			e->start = screen->width - x + screen->x;
 			break;
 	}
 	e->stop = e->start+1;
@@ -637,7 +642,7 @@ main (int argc, char **argv)
 						case XCB_BUTTON_PRESS:
 							printf("xcb button press event\n");
 							button_ev = (xcb_button_press_event_t *)ev;
-							printf("\tx:%d y:%d\n", button_ev->event_x, button_ev->event_y);
+							printf("\tx:%d y:%d", button_ev->event_x, button_ev->event_y);
 							xcb_process_event(button_ev->event_x);
                     }
 
