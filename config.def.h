@@ -29,3 +29,14 @@
 #define COLOR8 0x425059
 #define COLOR9 0xcc6666
 #define FOREGROUND 0xc5c8c6
+/* Events definition */
+#define	EVENT0	"xterm"
+#define	EVENT1	NULL
+#define	EVENT2	NULL
+#define	EVENT3	NULL
+#define	EVENT4	NULL
+#define	EVENT5	NULL
+#define	EVENT6	NULL
+#define	EVENT7	NULL
+#define	EVENT8	NULL
+#define	EVENT9	NULL
